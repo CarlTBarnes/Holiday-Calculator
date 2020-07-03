@@ -7,11 +7,14 @@
 HolidayList     PROCEDURE()   
 IsHoliday       PROCEDURE(DATE pDate, *STRING OutName, BYTE pNoWeekends=0, <*STRING OutDOW>),BOOL   
 DowName         PROCEDURE(LONG pDate),STRING
-EasterDateCalc  PROCEDURE(LONG Year, <*LONG OutGoodFri>, <*LONG OutAshWed>),LONG    
-EasterDate1900  PROCEDURE(LONG Year),LONG  !Calculate Easter from 1900 to 2299
+EasterDateCalc  PROCEDURE(LONG Year, <*LONG OutGoodFriday>, <*LONG OutAshWednesday>),LONG    
+EasterDate1900  PROCEDURE(LONG Year),LONG  !Calculate Easter limited to 1900 to 2299 from Tim Down
+EasterTest2     PROCEDURE()  !Test that EasterDateCalc()=EasterSunday1900() for 1900-2299
   END
   CODE
+  EasterTest2()  
   HolidayList() 
+  RETURN 
   
 HolidayList     PROCEDURE()
 HolYear         USHORT 
@@ -21,9 +24,10 @@ DOW               STRING(3)
 DateOf            LONG
 NameOf            STRING(80)
             END 
-bClp        BSTRING 
-ShowAll     BYTE(0)  
-NoWeekends  BYTE(0)  
+QX          USHORT
+bClp        ANY 
+ShowAll     BYTE  
+NoWeekends  BYTE  
 Window WINDOW('U. S. Holidays and Observances List'),AT(,,260,260),GRAY,SYSTEM,ICON(ICON:Thumbnail), |
             FONT('Segoe UI',10),RESIZE
         PROMPT('Year'),AT(2,4),USE(?PROMPT1)
@@ -36,8 +40,7 @@ Window WINDOW('U. S. Holidays and Observances List'),AT(,,260,260),GRAY,SYSTEM,I
                 ' years')
         LIST,AT(1,20),FULL,USE(?List:HolidayQ),VSCROLL,FROM(HolidayQ),FORMAT('21L(2)|FM~Day~C(0)@s3@' & |
                 '42L(2)|FM~Date~C(0)@d02-@90L(2)|FM~Day Name  (*=Federal Holiday)~@s80@')
-    END
-    
+    END    
     CODE  
     SYSTEM{PROP:PropVScroll}=1
     OPEN(Window)
@@ -53,11 +56,12 @@ Window WINDOW('U. S. Holidays and Observances List'),AT(,,260,260),GRAY,SYSTEM,I
              DO LoadHolidaysRtn ; DISPLAY   
         OF ?CopyBtn
             bClp='Day<9>Date<9>Holiday'
-            loop q#=1 to records(HolidayQ)       
-                GET(HolidayQ,q#)
+            LOOP QX=1 to records(HolidayQ)       
+                GET(HolidayQ,QX)
                 bClp=bClp&'<13,10>' & |
                     HolQ:Dow &'<9>'& FORMAT(HolQ:DateOf,@d01) &'<9>'& CLIP(HolQ:NameOf)
-            end ; SetClipboard(bClp)  
+            END 
+            SetClipboard(bClp)  
         OF ?EasterBtn ; DO Easter50YearsRtn    
         END    
     END
@@ -66,7 +70,6 @@ Window WINDOW('U. S. Holidays and Observances List'),AT(,,260,260),GRAY,SYSTEM,I
 LoadHolidaysRtn ROUTINE 
     FREE(HolidayQ)
     IF HolYear < 1800 THEN HolYear = YEAR(TODAY()).    
-!    EasterDay = EasterDateCalc(HolYear) 
     LOOP DyNdx = DATE(1,1,HolYear) TO DATE(1,1,Holyear+1)-1
          HolQ:NameOf = '' 
          IF IsHoliday(DyNdx,HolQ:NameOf, NoWeekends, HolQ:DOW) THEN
@@ -140,7 +143,7 @@ EasterDate  LONG,STATIC !save EasterDateCalc for repeat calls
      EasterYear = YrNum
      EasterDate = EasterDateCalc(EasterYear)
   END 
-  !Day   = DAY(pDate) ; MoNum = MONTH(pDate) ; YrNum = YEAR(pDate) 
+  !Day   = DAY(pDate) ; MoNum = MONTH(pDate) ; YrNum = YEAR(pDate) done by Over(pDATE)
   Dow    = pDate % 7
   DowNum = (Day-1) / 7 + 1   !1st,2nd,3rd DOW etc
   
@@ -179,7 +182,7 @@ EasterDate  LONG,STATIC !save EasterDateCalc for repeat calls
         IF Dow=Monday AND DowNum=2 THEN HolName='*Columbus Day (2nd Monday)'. ! - Second Monday in October
         IF Day=31 THEN HolName='Halloween'.
   OF 11   
-        !Election Day is the Tuesday following the first Monday in November.
+        !Election Day is the Tuesday following the first Monday in November in even years
         !It can fall on or between November 2 and November 8
         IF Dow=Tuesday AND DowNum<=2 AND YrNum%2=0 |
             AND ((DowNum=2 AND Day=8) OR (DowNum=1 AND Day<8)) THEN HolName='Election Day'.
@@ -192,49 +195,42 @@ EasterDate  LONG,STATIC !save EasterDateCalc for repeat calls
   OF 12
         IF Day=25 THEN HolName='*Christmas'.  ! - December 25th
         IF (Day=24 AND Dow=Friday) |
-        OR (Day=26 AND Dow=Monday) THEN HolName='*Christmas (Observed)'.
-        
+        OR (Day=26 AND Dow=Monday) THEN HolName='*Christmas (Observed)'.        
         IF Day=31 AND Dow=Friday THEN HolName='New Year''s Day (Observed)'.
   END
-    IF ~HolName THEN 
-         CASE pDate
-         !OF EasterDate-47   ;  HolName = 'Mardi Gras / Fat Tuesday'
-         OF EasterDate-46    ;  HolName = 'Ash Wednesday'
-         OF EasterDate-2     ;  HolName = 'Good Friday'
-         OF EasterDate       ;  HolName = 'Easter Sunday'
-         !OF EasterDate + 49 ;  HolName = 'Pentecost' !the descent of the Holy Spirit on the disciples of Jesus after his Ascension, held on the seventh Sunday after Easter
-         END        
-    END 
-    IF HolName[1]='*' AND (Dow=0 OR Dow=6) THEN   !*Federal holiday on Sun/Sat is not a Holday
-       HolName=SUB(HolName,2,99)
-    END
+  IF ~HolName THEN 
+       CASE pDate
+       !OF EasterDate-47   ;  HolName = 'Mardi Gras / Fat Tuesday'
+       OF EasterDate-46    ;  HolName = 'Ash Wednesday'
+       OF EasterDate-2     ;  HolName = 'Good Friday'
+       OF EasterDate       ;  HolName = 'Easter Sunday'
+       !OF EasterDate + 49 ;  HolName = 'Pentecost' !the descent of the Holy Spirit on the disciples of Jesus after his Ascension, held on the seventh Sunday after Easter
+       END        
+  END 
+  IF HolName[1]='*' AND (Dow=0 OR Dow=6) THEN   !*Federal holiday on Sun/Sat is not a Holday
+     HolName=SUB(HolName,2,99)
+  END
 
-    OutName = HolName
-    IsHol = CHOOSE(~HolName,0,1)
-    IF ~OMITTED(OutDOW) THEN OutDOW = CHOOSE( Dow + 1,'Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','???').
-    IF pNoWeekends AND Dow =0 OR Dow=6 THEN IsHol=0.    !Just want Weekdays Off
-    RETURN IsHol
-!-------------------
+  OutName = HolName
+  IsHol = CHOOSE(~HolName,0,1)
+  IF ~OMITTED(OutDOW) THEN OutDOW = CHOOSE( Dow + 1,'Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','???').
+  IF pNoWeekends AND Dow =0 OR Dow=6 THEN IsHol=0.    !Just want Weekdays Off
+  RETURN IsHol
+!===================================================================================================
 DowName     PROCEDURE(LONG pDate)!,STRING
     CODE
     IF pDate > 7 THEN pDate = pDate % 7.
     RETURN CHOOSE( pDate + 1,'Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','???')
-! ===================================================================
-! Easter Calculator 0.1
-! -------------------------------------------------------------------
-! Copyright (c) 2007 David Pinch.
-! Download from http://www.thoughtproject.com/Snippets/Easter/
-! ===================================================================
 
-    ! ===============================================================
-    ! Easter
-    ! ---------------------------------------------------------------
-    ! Calculates the date of Easter using an algorithm that was first
-    ! published in Butcher!s Ecclesiastical Calendar (1876).  It is
-    ! valid for all years in the Gregorian calendar (1583+).  The
-    ! code is based on an implementation by Peter Duffett-Smith in
-    ! Practical Astronomy with your Calculator (3rd Edition).
-    ! ===============================================================
+!===================================================================================================
+! Easter
+!---------------------------------------------------------------
+! Calculates the date of Easter using an algorithm that was first published in Butcher's Ecclesiastical Calendar (1876).  
+! It is valid for all years in the Gregorian calendar (1583+).  The code is based on an implementation by Peter 
+! Duffett-Smith in Practical Astronomy with your Calculator (3rd Edition).  
+! https://en.wikipedia.org/wiki/Computus#Anonymous_Gregorian_algorithm
+!===============================================================
+! Carl modified to use Multiply instead of Modulus % when possible because % is Divide which is expensive versus Multiply *
 
 EasterDateCalc  PROCEDURE(LONG Year, <*LONG OutGoodFri>, <*LONG OutAshWed>)!,LONG
 a   LONG,AUTO
@@ -253,27 +249,33 @@ n   LONG,AUTO
 p   LONG,AUTO
 Easter LONG,AUTO
     CODE      
-   a = Year % 19                ! Step 1: Divide the year by 19 and store the remainder in variable A. E.g.: 2000%19 A=5
-   b = Year / 100               ! Step 2: Divide the year by 100.  Store the integer result in B
-   c = Year % 100               !                                         and the remainder in C
-   d = b / 4                    ! Step 3: Divide (b/4). Store integer result in D
-   e = b % 4                    !                              and remainder in E
-   f = (b + 8) / 25             ! Step 4: Divide (b+8)/25 and store integer result in F
-   g = (b - f + 1) / 3          ! Step 5: Divide (b-f+1)/3 and store the integer result in G
-   h = (19*a +b-d-g+15) % 30    ! Step 6: Divide (19a+b-d-g+15)/30 and store remainder in H
-   i = c / 4                    ! Step 7: Divide C by 4. Store the integer result in I
-   k = c % 4                    !                               and the remainder in K
-   l = (32 + 2*e + 2*i -h-k) %7 ! Step 8: Divide (32+2e+2i-h-k) by 7.  Store the remainder in L
-   m = (a + 11*h + 22*l) / 451  ! Step 9: Divide (a + 11h + 22l) by 451 and store the integer result in M
-   n = (h + l - 7*m + 114) / 31 !Step 10: Divide (h + l - 7m + 114) by 31.  Store the integer result in N
-   p = (h + l - 7*m + 114) % 31 !                                                  and the remainder in P
-   Easter=Date(n, p+1, Year)    ! Done: p+1 is the day on which Easter falls. n is month 3 for March or 4 for April.
-   IF ~OMITTED(OutGoodFri) THEN OutGoodFri = Easter-2.  !Good Friday 2 days before Sunday
-   IF ~OMITTED(OutAshWed)  THEN OutAshWed  = Easter-46. !Ash Wednesday 46 days before Easter
-   ! Easter - 47  ;  HolQ:NameOf = 'Mardi Gras / Fat Tuesday'  !Day before Ash Wednesday
-   ! Easter + 49  ;  HolQ:NameOf = 'Pentecost' !the descent of the Holy Spirit on the disciples of Jesus after his Ascension, held on the seventh Sunday after Easter
-   Return Easter
-
+  a = Year % 19                  ! Step 1: Divide the year by 19 and store the remainder in variable A. E.g.: 2000%19 A=5
+  b = Year / 100                 ! Step 2: Divide the year by 100.  Store the integer result in B
+! c = Year % 100                 !                                         and the remainder in C
+  c = Year - b * 100             !                                         and the remainder in C
+  d = b / 4                      ! Step 3: Divide (b/4). Store integer result in D
+! e = b % 4                      !                              and remainder in E
+  e = b - d * 4                  !                              and remainder in E
+  f = (b + 8) / 25               ! Step 4: Divide (b+8)/25 and store integer result in F
+  g = (b - f + 1) / 3            ! Step 5: Divide (b-f+1)/3 and store the integer result in G
+  h = (19*a +b-d-g+15) % 30      ! Step 6: Divide (19a+b-d-g+15)/30 and store remainder in H
+  i = c / 4                      ! Step 7: Divide C by 4. Store the integer result in I
+! k = c % 4                      !                               and the remainder in K
+  k = c - i * 4                  !                               and the remainder in K
+  l = (32 + 2*e + 2*i -h-k) % 7  ! Step 8: Divide (32+2e+2i-h-k) by 7.  Store the remainder in L
+  m = (a + 11*h + 22*l) / 451    ! Step 9: Divide (a + 11h + 22l) by 451 and store the integer result in M
+! n = (h + l - 7*m + 114) / 31   !Step 10: Divide (h + l - 7m + 114) by 31.  Store the integer result in N
+! p = (h + l - 7*m + 114) % 31   !                                                  and the remainder in P
+  p = (h + l - 7*m + 114)        !Step 10: Calc   (h + l - 7m + 114) for next step Divide
+  n = p / 31                     !Step 10: Divide (h + l - 7m + 114) by 31.  Store the integer result in N
+  p = p - n * 31                 !                                                  and the remainder in P
+  Easter=Date(n, p+1, Year)      ! Done: p+1 is the day on which Easter falls. n is month 3 for March or 4 for April.
+  IF ~OMITTED(OutGoodFri) THEN OutGoodFri = Easter-2.  !Good Friday 2 days before Sunday
+  IF ~OMITTED(OutAshWed)  THEN OutAshWed  = Easter-46. !Ash Wednesday 46 days before Easter
+  ! Easter - 47  ;  HolQ:NameOf = 'Mardi Gras / Fat Tuesday'  !Day before Ash Wednesday
+  ! Easter + 49  ;  HolQ:NameOf = 'Pentecost' !the descent of the Holy Spirit on the disciples of Jesus after his Ascension, held on the seventh Sunday after Easter
+  Return Easter
+!===================================================================================================
 EasterDate1900  PROCEDURE(LONG Year)!,LONG  !Calculate Easter from 1900 to 2299
 ! Valid for any 4-digit year from 1900 to 2299   Finds date of GREGORIAN WESTERN EASTER SUNDAY
 ! Returns a Clarion standard date (LONG)         Returns 0 for out-of-range years.
@@ -284,34 +286,46 @@ EasterDate1900  PROCEDURE(LONG Year)!,LONG  !Calculate Easter from 1900 to 2299
 !Enjoy, Tim Down
 
 !Carl Barnes checked this against above EasterDateCalc() for 1900 to 2299 and it matched exactly.
-!it is less code and calculations so a better choice unless you need dates before 1900
+!It is much less code and calculations so a better choice unless you need dates before 1900 or after 2299
 
-A LONG
-B LONG
-C LONG
-D LONG
-FullMoonDate LONG(0)
-EasterMonth LONG(0)
-EasterDate LONG(0)
+A  LONG,AUTO
+B  LONG,AUTO
+C  LONG,AUTO
+D  LONG,AUTO          
+M  LONG,AUTO
+FullMoon LONG,AUTO
+Easter   LONG,AUTO
   CODE
-  IF (Year < 1900-99) OR (Year > 2299) THEN 
-     RETURN(0)
-  END
+  IF Year < 1900 OR Year > 2299 THEN RETURN(0).
   A = Year % 19
-  B = ((11*A)+5) % 30
-  IF (Year > 2199) THEN
-     B = ((11*A)+4) % 30
+  IF Year <= 2199 THEN
+     B = (11*A + 5) % 30
+  ELSE
+     B = (11*A + 4) % 30
   END
-  IF (B = 0) OR (B = 1 AND A > 10) THEN
+  IF B = 0 OR (B = 1 AND A > 10) THEN
      C = B + 1
   ELSE
      C = B
   END
-  CASE C
-  OF  1 TO 19 ; EasterMonth = 4
-  ELSE        ; EasterMonth = 3   !OF 20 TO 29
-  END
   D = (50 - C) % 31
-  FullMoonDate = DATE(EasterMonth,D,Year)
-  EasterDate = FullMoonDate + (7 - (FullMoonDate % 7))
-  RETURN(EasterDate)      
+  IF C <= 19 THEN 
+     M = 4          !OF  1 TO 19
+  ELSE
+     M = 3          !OF 20 TO 29
+  END
+  FullMoon = DATE(M,D,Year)
+  Easter = FullMoon + 7 - FullMoon % 7
+  RETURN(Easter)      
+!===================================================================================================
+EasterTest2 PROCEDURE()  !Test that EasterDateCalc()=EasterSunday1900() for 1900-2299
+Yr LONG 
+E1 LONG 
+E2 LONG 
+  CODE
+  LOOP Yr=1900 to 2299   
+    E1=EasterDate1900(Yr) 
+    E2=EasterDateCalc(Yr)
+    IF E1<>E2 THEN STOP('Easter Check failed Year: ' & Yr &'  E1=' & E1 &'  E2=' & E2 ).
+  END 
+  !Message('EasterTest2 done at ' & Yr)  
