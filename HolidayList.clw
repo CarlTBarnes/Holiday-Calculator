@@ -22,7 +22,7 @@ DyNdx           LONG
 HolidayQ    QUEUE,PRE(HolQ)
 DOW               STRING(3)
 DateOf            LONG
-NameOf            STRING(80)
+NameOf            STRING(128)
             END 
 QX          USHORT
 bClp        ANY 
@@ -39,7 +39,7 @@ Window WINDOW('U. S. Holidays and Observances List'),AT(,,260,260),GRAY,SYSTEM,I
         BUTTON('Easter'),AT(223,2,30),USE(?EasterBtn),SKIP,TIP('Easter for next 10<13,10>and last 50' & |
                 ' years')
         LIST,AT(1,20),FULL,USE(?List:HolidayQ),VSCROLL,FROM(HolidayQ),FORMAT('21L(2)|FM~Day~C(0)@s3@' & |
-                '42L(2)|FM~Date~C(0)@d02-@90L(2)|FM~Day Name  (*=Federal Holiday)~@s80@')
+                '42L(2)|FM~Date~C(0)@d02-@90L(2)|FM~Day Name  (*=Federal Holiday)~@s128@')
     END    
     CODE  
     SYSTEM{PROP:PropVScroll}=1
@@ -90,14 +90,17 @@ Easter50YearsRtn ROUTINE    !Test of Easter Calc
     DATA
 Y        USHORT
 EDay     LONG
+EDay2    LONG
 GoodFri  LONG
 AshWed   LONG 
     CODE
     FREE(HolidayQ)
     LOOP Y = HolYear+10 TO HolYear-50 BY -1
          EDay = EasterDateCalc(Y, GoodFri, AshWed)
+         EDay2 = EasterDate1900(Y)
          HolQ:DateOf = EDay 
-         HolQ:NameOf = 'Easter ' & format(EDay,@d03) &'  GoodFri='& format(GoodFri,@d03) &'  Ash='& format(AshWed,@d03) &' Cla=' & EDay
+         HolQ:NameOf = 'Easter ' & format(EDay,@d03) &'  GoodFri='& format(GoodFri,@d03) &'  Ash='& format(AshWed,@d03) &' ClaDate=' & EDay & |
+                       CHOOSE(EDay=EDay2,'',' ?{5}<<>' & EDay2 &'=EasterDate1900()')
          HolQ:DOW = DowName(EDay)
          ADD(HolidayQ) 
     END
@@ -230,7 +233,8 @@ DowName     PROCEDURE(LONG pDate)!,STRING
 ! Duffett-Smith in Practical Astronomy with your Calculator (3rd Edition).  
 ! https://en.wikipedia.org/wiki/Computus#Anonymous_Gregorian_algorithm
 !===============================================================
-! Carl modified to use Multiply instead of Modulus % when possible because % is Divide which is expensive versus Multiply *
+! Carl modified Modulus % that was Divide twice to instead subtract previous Divide result Multiplied * by Divisor as faster
+! Because this returns a Clarion Date it can only go back to 1801. If you need more return string M/DD/YYYY.
 
 EasterDateCalc  PROCEDURE(LONG Year, <*LONG OutGoodFri>, <*LONG OutAshWed>)!,LONG
 a   LONG,AUTO
@@ -248,32 +252,26 @@ m   LONG,AUTO
 n   LONG,AUTO
 p   LONG,AUTO
 Easter LONG,AUTO
-    CODE      
+    CODE                         !   Note: All divides have an integer result variable so have an implicit INT()
   a = Year % 19                  ! Step 1: Divide the year by 19 and store the remainder in variable A. E.g.: 2000%19 A=5
   b = Year / 100                 ! Step 2: Divide the year by 100.  Store the integer result in B
-! c = Year % 100                 !                                         and the remainder in C
   c = Year - b * 100             !                                         and the remainder in C
   d = b / 4                      ! Step 3: Divide (b/4). Store integer result in D
-! e = b % 4                      !                              and remainder in E
   e = b - d * 4                  !                              and remainder in E
   f = (b + 8) / 25               ! Step 4: Divide (b+8)/25 and store integer result in F
   g = (b - f + 1) / 3            ! Step 5: Divide (b-f+1)/3 and store the integer result in G
   h = (19*a +b-d-g+15) % 30      ! Step 6: Divide (19a+b-d-g+15)/30 and store remainder in H
   i = c / 4                      ! Step 7: Divide C by 4. Store the integer result in I
-! k = c % 4                      !                               and the remainder in K
   k = c - i * 4                  !                               and the remainder in K
   l = (32 + 2*e + 2*i -h-k) % 7  ! Step 8: Divide (32+2e+2i-h-k) by 7.  Store the remainder in L
   m = (a + 11*h + 22*l) / 451    ! Step 9: Divide (a + 11h + 22l) by 451 and store the integer result in M
-! n = (h + l - 7*m + 114) / 31   !Step 10: Divide (h + l - 7m + 114) by 31.  Store the integer result in N
-! p = (h + l - 7*m + 114) % 31   !                                                  and the remainder in P
   p = (h + l - 7*m + 114)        !Step 10: Calc   (h + l - 7m + 114) for next step Divide
-  n = p / 31                     !Step 10: Divide (h + l - 7m + 114) by 31.  Store the integer result in N
-  p = p - n * 31                 !                                                  and the remainder in P
-  Easter=Date(n, p+1, Year)      ! Done: p+1 is the day on which Easter falls. n is month 3 for March or 4 for April.
+  n = p / 31                     !Step 10: Divide by 31.  Store the integer result in N     is Easter month
+  p = p - n * 31 + 1             !                           and the remainder     in P + 1 is Easter Day
+  Easter=Date(n, p, Year)        ! Done: p is the day on which Easter falls. n is month 3 for March or 4 for April.
   IF ~OMITTED(OutGoodFri) THEN OutGoodFri = Easter-2.  !Good Friday 2 days before Sunday
   IF ~OMITTED(OutAshWed)  THEN OutAshWed  = Easter-46. !Ash Wednesday 46 days before Easter
-  ! Easter - 47  ;  HolQ:NameOf = 'Mardi Gras / Fat Tuesday'  !Day before Ash Wednesday
-  ! Easter + 49  ;  HolQ:NameOf = 'Pentecost' !the descent of the Holy Spirit on the disciples of Jesus after his Ascension, held on the seventh Sunday after Easter
+  ! Canjun FYI ... Easter - 47  =>  Mardi Gras / Fat Tuesday  - 1 day before Ash Wednesday
   Return Easter
 !===================================================================================================
 EasterDate1900  PROCEDURE(LONG Year)!,LONG  !Calculate Easter from 1900 to 2299
@@ -285,18 +283,17 @@ EasterDate1900  PROCEDURE(LONG Year)!,LONG  !Calculate Easter from 1900 to 2299
 !So, I have come up with the following function if anyone finds it useful. (It uses a method for calculating the Gregorian Western Easter Sunday devised by Prof. R Sivaraman).
 !Enjoy, Tim Down
 
-!Carl Barnes checked this against above EasterDateCalc() for 1900 to 2299 and it matched exactly.
-!It is much less code and calculations so a better choice unless you need dates before 1900 or after 2299
+!Carl checked this against above EasterDateCalc() for 1894 to 2301 and it matched exactly.
+!It is much less code and calculations, so a better choice unless you need < 1900 or > 2300
 
 A  LONG,AUTO
 B  LONG,AUTO
-C  LONG,AUTO
 D  LONG,AUTO          
 M  LONG,AUTO
 FullMoon LONG,AUTO
 Easter   LONG,AUTO
   CODE
-  IF Year < 1900 OR Year > 2299 THEN RETURN(0).
+  IF Year < 1894 OR Year > 2301 THEN RETURN(0).
   A = Year % 19
   IF Year <= 2199 THEN
      B = (11*A + 5) % 30
@@ -304,12 +301,10 @@ Easter   LONG,AUTO
      B = (11*A + 4) % 30
   END
   IF B = 0 OR (B = 1 AND A > 10) THEN
-     C = B + 1
-  ELSE
-     C = B
+     B += 1
   END
-  D = (50 - C) % 31
-  IF C <= 19 THEN 
+  D = (50 - B) % 31
+  IF B <= 19 THEN 
      M = 4          !OF  1 TO 19
   ELSE
      M = 3          !OF 20 TO 29
@@ -323,9 +318,53 @@ Yr LONG
 E1 LONG 
 E2 LONG 
   CODE
-  LOOP Yr=1900 to 2299   
+  LOOP Yr=1894 TO 2301
     E1=EasterDate1900(Yr) 
     E2=EasterDateCalc(Yr)
     IF E1<>E2 THEN STOP('Easter Check failed Year: ' & Yr &'  E1=' & E1 &'  E2=' & E2 ).
   END 
-  !Message('EasterTest2 done at ' & Yr)  
+  !Message('EasterTest2 done at ' & Yr)      
+
+
+!===================================================================================================
+    OMIT('** Original Code **')
+! On Tue, Jun 23 2020 5:42 am, Tim Down <tim@ftipsDOTcom> said:
+
+EasterSunday PROCEDURE(LONG PassedYear),LONG
+! Valid for any 4-digit year from 1900 to 2299
+! Finds date of GREGORIAN WESTERN EASTER SUNDAY
+! Returns a Clarion standard date (LONG)
+! Returns 0 for out-of-range years.
+Inter_A      LONG(0)
+Inter_B      LONG(0)
+Inter_C      LONG(0)
+Inter_D      LONG(0)
+FullMoonDate LONG(0)
+EasterMonth  LONG(0)
+EasterDate   LONG(0)
+  CODE
+   IF (PassedYear < 1900) OR (PassedYear > 2299)
+      RETURN(0)
+   END
+   Inter_A = PassedYear % 19
+   Inter_B = ((11*Inter_A)+5) % 30
+   IF (PassedYear > 2199)
+      Inter_B = ((11*Inter_A)+4) % 30
+   END
+   IF (Inter_B = 0) OR (Inter_B = 1 AND Inter_A > 10)
+      Inter_C = Inter_B + 1
+   ELSE
+      Inter_C = Inter_B
+   END
+   CASE Inter_C
+     OF 1 TO 19
+        EasterMonth = 4
+     OF 20 TO 29
+        EasterMonth = 3
+   END
+   Inter_D = (50 - Inter_C) % 31
+   FullMoonDate = DATE(EasterMonth,Inter_D,PassedYear)
+   EasterDate = FullMoonDate + (7 - (FullMoonDate % 7))
+   RETURN(EasterDate)
+
+    !end of OMIT('** Original Code **')  
