@@ -175,6 +175,10 @@ EasterDate  LONG,STATIC !save EasterDateCalc for repeat calls
         IF Day=14 THEN HolName='Flag Day'.   !14 june - flag day
         IF Dow=Monday AND Day+7>31 THEN HolName='*Memorial Day (Last Monday)'.! - Last Monday in May
         IF Dow=Sunday AND DowNum=3 THEN HolName='Father''s Day (3rd Sunday)'.
+        !2021 new Federal Holiday June 19th https://en.wikipedia.org/wiki/Juneteenth
+        IF Day=19                  THEN HolName='*Juneteenth National Independence Day'. !  - June 19th
+        IF (Day=18 AND Dow=Friday) |
+        OR (Day=20 AND Dow=Monday) THEN HolName='*Juneteenth Day (Observed)'.
   OF 7
         IF Day=4                  THEN HolName='*Independence Day (4th of July)'.
         IF (Day=3 AND Dow=Friday) |
