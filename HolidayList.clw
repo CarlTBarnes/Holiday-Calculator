@@ -221,7 +221,7 @@ EasterDate  LONG,STATIC !save EasterDateCalc for repeat calls
   OutName = HolName
   IsHol = CHOOSE(~HolName,0,1)
   IF ~OMITTED(OutDOW) THEN OutDOW = CHOOSE( Dow + 1,'Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','???').
-  IF pNoWeekends AND Dow =0 OR Dow=6 THEN IsHol=0.    !Just want Weekdays Off
+  IF pNoWeekends AND (Dow =0 OR Dow=6) THEN IsHol=0.    !Just want Weekdays Off
   RETURN IsHol
 !===================================================================================================
 DowName     PROCEDURE(LONG pDate)!,STRING
